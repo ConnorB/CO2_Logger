@@ -12,7 +12,7 @@ ModbusMaster sensor;
 #define MAX485_RE_NEG 2
 
 // Sensor slave ID
-#define SENSOR_SLAVE_ID 1
+#define SENSOR_SLAVE_ID 240
 
 // SD Card pin
 const int chipSelect = 10;
@@ -60,72 +60,62 @@ void setup() {
   }
 }
 
-
 void loop() {
-  // Read a single register that contains the CO2 concentration or the parameter of interest
-  int sensVal = sensor.readHoldingRegisters(256, 1);
-  
-  if (sensVal == sensor.ku8MBSuccess) {
-    // Get the 16-bit signed integer from the response buffer
-    int co2 = sensor.getResponseBuffer(0);
-    Serial.print("CO2 = ");
-    Serial.println(co2);
-
-    // Save to SD card
-    dataFile = SD.open("datalog.txt", FILE_WRITE);
-    if (dataFile) {
-      // write timestamp
-      DateTime now = rtc.now();
-      dataFile.print(now.year(), DEC);
-      dataFile.print('-');
-      dataFile.print(now.month(), DEC);
-      dataFile.print('-');
-      dataFile.print(now.day(), DEC);
-      dataFile.print(' ');
-      dataFile.print(now.hour(), DEC);
-      dataFile.print(':');
-      dataFile.print(now.minute(), DEC);
-      dataFile.print(':');
-      dataFile.print(now.second(), DEC);
-
-      dataFile.print(", "); // delimiter between timestamp and data
-      
-      dataFile.println(co2);
-      dataFile.close();
-      Serial.println("Data written to SD card.");
-    } else {
-      Serial.println("Error opening datalog.txt");
-    }
+  // Reading Temperature from Modbus address 4
+  uint8_t tempResult = sensor.readHoldingRegisters(4, 2);
+  float temperature = 0.0;
+  if (tempResult == sensor.ku8MBSuccess) {
+    uint16_t tempLow = sensor.getResponseBuffer(0);
+    uint16_t tempHigh = sensor.getResponseBuffer(1);
+    uint32_t tempRaw = ((uint32_t)tempHigh << 16) | tempLow;
+    temperature = *((float*)&tempRaw);
+    Serial.print("Temperature (C) = ");
+    Serial.println(temperature);
   } else {
-    int co2 = -1000;
-    Serial.print("CO2 = ");
-    Serial.println(co2);
-
-      // Save to SD card
-    dataFile = SD.open("datalog.txt", FILE_WRITE);
-    if (dataFile) {
-      // write timestamp
-      DateTime now = rtc.now();
-      dataFile.print(now.year(), DEC);
-      dataFile.print('-');
-      dataFile.print(now.month(), DEC);
-      dataFile.print('-');
-      dataFile.print(now.day(), DEC);
-      dataFile.print(' ');
-      dataFile.print(now.hour(), DEC);
-      dataFile.print(':');
-      dataFile.print(now.minute(), DEC);
-      dataFile.print(':');
-      dataFile.print(now.second(), DEC);
-
-      dataFile.print(", "); // delimiter between timestamp and data
-      
-      dataFile.println(co2);
-      dataFile.close();
-      Serial.println("Data written to SD card.");
-    } else {
-      Serial.println("Error opening datalog.txt");
-    }
+    Serial.println("Error reading temperature");
   }
-  delay(1000); // delay 2 seconds
+delay(50);
+  // Reading CO2 from Modbus address 0
+  uint8_t co2Result = sensor.readHoldingRegisters(0, 2);
+  float co2 = 0.0;
+  if (co2Result == sensor.ku8MBSuccess) {
+    uint16_t co2Low = sensor.getResponseBuffer(0);
+    uint16_t co2High = sensor.getResponseBuffer(1);
+    uint32_t co2Raw = ((uint32_t)co2High << 16) | co2Low;
+    co2 = *((float*)&co2Raw);
+    Serial.print("CO2 (ppm) = ");
+    Serial.println(co2);
+  } else {
+    Serial.println("Error reading CO2");
+  }
+
+  // Save to SD card, logging both temperature and CO2
+  dataFile = SD.open("datalog.txt", FILE_WRITE);
+  if (dataFile) {
+    // write timestamp
+    DateTime now = rtc.now();
+    dataFile.print(now.year(), DEC);
+    dataFile.print('-');
+    dataFile.print(now.month(), DEC);
+    dataFile.print('-');
+    dataFile.print(now.day(), DEC);
+    dataFile.print(' ');
+    dataFile.print(now.hour(), DEC);
+    dataFile.print(':');
+    dataFile.print(now.minute(), DEC);
+    dataFile.print(':');
+    dataFile.print(now.second(), DEC);
+
+    dataFile.print(", "); // Label the temperature data
+    dataFile.print(temperature);
+    dataFile.print(", "); // Label the CO2 data
+    dataFile.println(co2);
+    
+    dataFile.close();
+    Serial.println("Data written to SD card.");
+  } else {
+    Serial.println("Error opening datalog.txt");
+  }
+  
+  delay(5000); // delay 2 seconds
 }
